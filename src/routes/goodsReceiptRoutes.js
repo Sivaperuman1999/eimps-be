@@ -1,5 +1,7 @@
 import express from 'express';
 import GoodsReceipt from '../models/GoodsReceipt.js';
+import Item from '../models/Item.js';
+import StockTransaction from '../models/StockTransaction.js';
 import { authenticate } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -130,10 +132,93 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/submit', async (req, res, next) => {
   try {
-    const { status } = req.body;
-    const receipt = await GoodsReceipt.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    const receipt = await GoodsReceipt.findById(req.params.id);
+    if (!receipt) return next(Object.assign(new Error('Goods Receipt not found'), { statusCode: 404 }));
+
+    if (receipt.status !== 'DRAFT') {
+      return next(Object.assign(new Error('Only DRAFT receipts can be submitted'), { statusCode: 400 }));
+    }
+
+    receipt.status = 'SUBMITTED';
+    await receipt.save();
+    
+    res.sendSuccess(receipt);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id/approve', async (req, res, next) => {
+  try {
+    const role = req.user.roleCode || req.user.role;
+    const receipt = await GoodsReceipt.findById(req.params.id);
+    
+    if (!receipt) return next(Object.assign(new Error('Goods Receipt not found'), { statusCode: 404 }));
+
+    let newStatus = receipt.status;
+
+    if (receipt.status === 'SUBMITTED' && (role === 'MANAGER' || role === 'ADMIN')) {
+      newStatus = 'PENDING_REVIEW';
+    } else if (receipt.status === 'PENDING_REVIEW' && (role === 'MANAGER' || role === 'ADMIN')) {
+      newStatus = 'RECEIVED';
+    } else {
+      return next(Object.assign(new Error('Invalid status transition or permission denied'), { statusCode: 403 }));
+    }
+
+    receipt.status = newStatus;
+    await receipt.save();
+
+    if (newStatus === 'RECEIVED') {
+      // Process inventory updates
+      for (const item of receipt.items) {
+        const inventoryItem = await Item.findById(item.itemId);
+        if (inventoryItem) {
+          const previousStock = inventoryItem.currentStock || inventoryItem.quantity || 0;
+          const newStock = previousStock + item.receivedQuantity;
+          
+          inventoryItem.currentStock = newStock;
+          inventoryItem.quantity = newStock; 
+          await inventoryItem.save();
+
+          await StockTransaction.create({
+            itemId: item.itemId,
+            transactionType: 'RECEIPT',
+            quantity: item.receivedQuantity,
+            previousStock,
+            newStock,
+            referenceType: 'GOODS_RECEIPT',
+            referenceId: receipt._id,
+            notes: `Received from GRN: ${receipt.grnNumber}`,
+            createdBy: req.user.id
+          });
+        }
+      }
+    }
+
+    res.sendSuccess(receipt);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id/reject', async (req, res, next) => {
+  try {
+    const role = req.user.roleCode || req.user.role;
+    if (role === 'USER') {
+      return next(Object.assign(new Error('Permission denied'), { statusCode: 403 }));
+    }
+
+    const receipt = await GoodsReceipt.findById(req.params.id);
+    if (!receipt) return next(Object.assign(new Error('Goods Receipt not found'), { statusCode: 404 }));
+
+    if (!['SUBMITTED', 'PENDING_REVIEW'].includes(receipt.status)) {
+       return next(Object.assign(new Error('Cannot reject a receipt in this status'), { statusCode: 400 }));
+    }
+
+    receipt.status = 'REJECTED';
+    await receipt.save();
     res.sendSuccess(receipt);
   } catch (err) {
     next(err);

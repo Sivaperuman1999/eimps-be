@@ -43,9 +43,17 @@ const purchaseOrderSchema = new mongoose.Schema(
     },
     status: { 
       type: String, 
-      enum: ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED'],
+      enum: ['DRAFT', 'SUBMITTED', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'PROCESSING', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED', 'COMPLETED'],
       default: 'DRAFT' 
     },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedAt: { type: Date, default: null },
+    rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    rejectedAt: { type: Date, default: null },
+    rejectionReason: { type: String, default: null },
+    comments: { type: String, default: null },
+    previousStatus: { type: String, default: null },
     orderDate: { type: Date, default: Date.now },
     totalAmount: { type: Number, required: true },
     items: [purchaseOrderItemSchema], // Embedded array replacing PostgreSQL foreign key join

@@ -7,6 +7,10 @@ const itemSchema = new mongoose.Schema(
     description: { type: String, default: null },
     unitPrice: { type: Number, required: true },
     quantity: { type: Number, default: 0 },
+    currentStock: { type: Number, default: 0 },
+    availableStock: { type: Number, default: 0 },
+    allocatedStock: { type: Number, default: 0 },
+    minimumStockLevel: { type: Number, default: 10 },
     isActive: { type: Boolean, default: true },
     categoryId: { 
       type: mongoose.Schema.Types.ObjectId, 

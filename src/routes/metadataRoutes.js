@@ -27,12 +27,23 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/roles', (req, res) => {
-  const roles = [
-    { id: '1', code: 'ADMIN', name: 'Admin' },
-    { id: '2', code: 'USER', name: 'User' }
-  ];
-  res.sendSuccess({ data: roles });
+import Role from '../models/Role.js';
+
+router.get('/roles', async (req, res, next) => {
+  try {
+    let roles = await Role.find();
+    if (roles.length === 0) {
+      // Seed default roles if none exist
+      roles = await Role.insertMany([
+        { roleCode: 'ADMIN', roleName: 'Admin', permissions: ['ALL'] },
+        { roleCode: 'MANAGER', roleName: 'Manager', permissions: ['APPROVE_PO', 'VIEW_INVENTORY'] },
+        { roleCode: 'USER', roleName: 'User', permissions: ['VIEW_INVENTORY'] }
+      ]);
+    }
+    res.sendSuccess({ data: roles });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

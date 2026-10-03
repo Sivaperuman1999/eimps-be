@@ -36,7 +36,7 @@ const goodsReceiptSchema = new mongoose.Schema(
     receivedDate: { type: Date, default: Date.now },
     status: { 
       type: String, 
-      enum: ['DRAFT', 'RECEIVED', 'CANCELLED'],
+      enum: ['DRAFT', 'SUBMITTED', 'PENDING_REVIEW', 'RECEIVED', 'REJECTED', 'CANCELLED'],
       default: 'DRAFT'
     },
     items: [goodsReceiptItemSchema],

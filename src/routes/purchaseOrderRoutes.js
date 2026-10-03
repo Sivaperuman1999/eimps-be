@@ -115,10 +115,83 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/submit', async (req, res, next) => {
   try {
-    const { status } = req.body;
-    const po = await PurchaseOrder.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    const po = await PurchaseOrder.findById(req.params.id);
+    if (!po) return next(Object.assign(new Error('PO not found'), { statusCode: 404 }));
+
+    if (po.status !== 'DRAFT') {
+      return next(Object.assign(new Error('Only DRAFT POs can be submitted'), { statusCode: 400 }));
+    }
+
+    po.previousStatus = po.status;
+    po.status = 'SUBMITTED';
+    await po.save();
+    
+    res.sendSuccess(po);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id/approve', async (req, res, next) => {
+  try {
+    const { comments } = req.body;
+    const role = req.user.roleCode || req.user.role;
+    const userId = req.user.id;
+
+    const po = await PurchaseOrder.findById(req.params.id);
+    if (!po) return next(Object.assign(new Error('PO not found'), { statusCode: 404 }));
+
+    const previousStatus = po.status;
+    let newStatus = po.status;
+
+    if (po.status === 'SUBMITTED' && (role === 'MANAGER' || role === 'ADMIN')) {
+      newStatus = 'PENDING_REVIEW';
+    } else if (po.status === 'PENDING_REVIEW' && (role === 'MANAGER' || role === 'ADMIN')) {
+      newStatus = 'APPROVED';
+      po.approvedBy = userId;
+      po.approvedAt = new Date();
+    } else {
+      return next(Object.assign(new Error('Invalid status transition or permission denied'), { statusCode: 403 }));
+    }
+
+    po.status = newStatus;
+    po.previousStatus = previousStatus;
+    if (comments) po.comments = comments;
+    
+    await po.save();
+    res.sendSuccess(po);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id/reject', async (req, res, next) => {
+  try {
+    const { rejectionReason, comments } = req.body;
+    const role = req.user.roleCode || req.user.role;
+    const userId = req.user.id;
+
+    if (role === 'USER') {
+      return next(Object.assign(new Error('Permission denied'), { statusCode: 403 }));
+    }
+
+    const po = await PurchaseOrder.findById(req.params.id);
+    if (!po) return next(Object.assign(new Error('PO not found'), { statusCode: 404 }));
+
+    if (!['SUBMITTED', 'PENDING_REVIEW'].includes(po.status)) {
+       return next(Object.assign(new Error('Cannot reject a PO in this status'), { statusCode: 400 }));
+    }
+
+    po.previousStatus = po.status;
+    po.status = 'REJECTED';
+    po.rejectedBy = userId;
+    po.rejectedAt = new Date();
+    po.rejectionReason = rejectionReason;
+    if (comments) po.comments = comments;
+
+    await po.save();
     res.sendSuccess(po);
   } catch (err) {
     next(err);

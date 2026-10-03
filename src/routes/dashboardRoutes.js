@@ -11,6 +11,19 @@ router.use(authenticate);
 
 router.get('/', async (req, res, next) => {
   try {
+    const role = req.user.roleCode || req.user.role;
+    const userId = req.user.id;
+    
+    let poQuery = {};
+    let grnQuery = {};
+    
+    // Role-based filtering
+    if (role === 'USER') {
+      poQuery = { createdBy: userId };
+      // Assuming users don't see GRNs or only see GRNs for their POs. 
+      // We will leave GRNs open or empty for now depending on business rules.
+    }
+
     const [
       totalInventory,
       activeInventory,
@@ -23,7 +36,9 @@ router.get('/', async (req, res, next) => {
       totalPOs,
       draftPOs,
       submittedPOs,
+      pendingReviewPOs,
       approvedPOs,
+      processingPOs,
       completedPOs,
       cancelledPOs,
       totalPOValueResult,
@@ -35,26 +50,27 @@ router.get('/', async (req, res, next) => {
       Item.countDocuments(),
       Item.countDocuments({ isActive: true }),
       Item.countDocuments({ isActive: false }),
-      Item.countDocuments({ quantity: { $gt: 0, $lte: 10 } }),
-      Item.countDocuments({ quantity: 0 }),
+      Item.countDocuments({ currentStock: { $gt: 0, $lte: 10 } }),
+      Item.countDocuments({ currentStock: 0 }),
       Vendor.countDocuments(),
       Vendor.countDocuments({ isActive: true }),
       Vendor.countDocuments({ isActive: false }),
-      PurchaseOrder.countDocuments(),
-      PurchaseOrder.countDocuments({ status: 'DRAFT' }),
-      PurchaseOrder.countDocuments({ status: 'SUBMITTED' }),
-      PurchaseOrder.countDocuments({ status: 'APPROVED' }),
-      PurchaseOrder.countDocuments({ status: 'COMPLETED' }),
-      PurchaseOrder.countDocuments({ status: 'CANCELLED' }),
-      PurchaseOrder.aggregate([{ $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
-      GoodsReceipt.countDocuments(),
-      GoodsReceipt.countDocuments({ status: 'DRAFT' }),
-      GoodsReceipt.countDocuments({ status: 'RECEIVED' }),
-      GoodsReceipt.countDocuments({ status: 'CANCELLED' })
+      PurchaseOrder.countDocuments(poQuery),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'DRAFT' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'SUBMITTED' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'PENDING_REVIEW' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'APPROVED' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'PROCESSING' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'COMPLETED' }),
+      PurchaseOrder.countDocuments({ ...poQuery, status: 'CANCELLED' }),
+      PurchaseOrder.aggregate([{ $match: poQuery }, { $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
+      GoodsReceipt.countDocuments(grnQuery),
+      GoodsReceipt.countDocuments({ ...grnQuery, status: 'DRAFT' }),
+      GoodsReceipt.countDocuments({ ...grnQuery, status: 'RECEIVED' }),
+      GoodsReceipt.countDocuments({ ...grnQuery, status: 'CANCELLED' })
     ]);
 
-    // Aggregate total stock across all active items
-    const totalStockResult = await Item.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: "$quantity" } } }]);
+    const totalStockResult = await Item.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, total: { $sum: "$currentStock" } } }]);
     const totalStock = totalStockResult.length > 0 ? totalStockResult[0].total : 0;
     const totalPOValue = totalPOValueResult.length > 0 ? totalPOValueResult[0].total : 0;
 
@@ -76,7 +92,9 @@ router.get('/', async (req, res, next) => {
         total: totalPOs,
         draft: draftPOs,
         submitted: submittedPOs,
+        pendingReview: pendingReviewPOs,
         approved: approvedPOs,
+        processing: processingPOs,
         completed: completedPOs,
         cancelled: cancelledPOs,
         totalValue: totalPOValue
