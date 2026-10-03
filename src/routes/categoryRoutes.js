@@ -8,6 +8,25 @@ router.use(authenticate);
 
 router.get('/', async (req, res, next) => {
   try {
+    if (req.query.page) {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 25;
+      const skip = (page - 1) * limit;
+
+      const categories = await Category.find().skip(skip).limit(limit);
+      const total = await Category.countDocuments();
+
+      return res.sendSuccess({
+        categories,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
     const categories = await Category.find();
     res.sendSuccess(categories);
   } catch (err) {

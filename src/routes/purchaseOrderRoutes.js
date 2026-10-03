@@ -8,6 +8,25 @@ router.use(authenticate);
 
 router.get('/', async (req, res, next) => {
   try {
+    if (req.query.page) {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 25;
+      const skip = (page - 1) * limit;
+
+      const purchaseOrders = await PurchaseOrder.find().populate('vendorId', 'name code').populate('items.itemId', 'name sku unitPrice').skip(skip).limit(limit);
+      const total = await PurchaseOrder.countDocuments();
+
+      return res.sendSuccess({
+        purchaseOrders,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
     const purchaseOrders = await PurchaseOrder.find().populate('vendorId', 'name code').populate('items.itemId', 'name sku unitPrice');
     res.sendSuccess(purchaseOrders);
   } catch (err) {

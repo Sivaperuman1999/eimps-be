@@ -7,23 +7,46 @@ const router = express.Router();
 
 router.use(authenticate);
 
+router.get('/me', async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      const err = new Error('User not found');
+      err.statusCode = 404;
+      return next(err);
+    }
+    res.sendSuccess(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/', async (req, res, next) => {
   try {
     const loggedInUserId = req.user._id;
     const query = { _id: { $ne: loggedInUserId } };
 
-    const users = await User.find(query).select('-password');
-    const total = await User.countDocuments(query);
+    if (req.query.page) {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 25;
+      const skip = (page - 1) * limit;
 
-    res.sendSuccess({
-      users,
-      pagination: {
-        page: 1,
-        limit: users.length > 0 ? users.length : 10,
-        total: total,
-        totalPages: 1
-      }
-    });
+      const users = await User.find(query).select('-password').skip(skip).limit(limit);
+      const total = await User.countDocuments(query);
+
+      return res.sendSuccess({
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
+    const users = await User.find(query).select('-password');
+    res.sendSuccess(users);
   } catch (err) {
     next(err);
   }

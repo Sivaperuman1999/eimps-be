@@ -8,6 +8,25 @@ router.use(authenticate);
 
 router.get('/', async (req, res, next) => {
   try {
+    if (req.query.page) {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 25;
+      const skip = (page - 1) * limit;
+
+      const vendors = await Vendor.find().skip(skip).limit(limit);
+      const total = await Vendor.countDocuments();
+
+      return res.sendSuccess({
+        vendors,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    }
+
     const vendors = await Vendor.find();
     res.sendSuccess(vendors);
   } catch (err) {
