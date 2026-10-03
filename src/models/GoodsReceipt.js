@@ -39,6 +39,13 @@ const goodsReceiptSchema = new mongoose.Schema(
       enum: ['DRAFT', 'SUBMITTED', 'PENDING_REVIEW', 'RECEIVED', 'REJECTED', 'CANCELLED'],
       default: 'DRAFT'
     },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedAt: { type: Date, default: null },
+    rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    rejectedAt: { type: Date, default: null },
+    rejectionReason: { type: String, default: null },
+    comments: { type: String, default: null },
     items: [goodsReceiptItemSchema],
   },
   {

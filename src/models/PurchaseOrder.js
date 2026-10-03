@@ -8,6 +8,7 @@ const purchaseOrderItemSchema = new mongoose.Schema(
       required: true 
     },
     quantity: { type: Number, required: true },
+    receivedQuantity: { type: Number, default: 0 },
     unitPrice: { type: Number, required: true },
     totalPrice: { type: Number, required: true },
   },

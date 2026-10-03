@@ -2,6 +2,7 @@ import express from 'express';
 import GoodsReceipt from '../models/GoodsReceipt.js';
 import Item from '../models/Item.js';
 import StockTransaction from '../models/StockTransaction.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 import { authenticate } from '../middlewares/auth.js';
 
 const router = express.Router();
@@ -156,6 +157,7 @@ router.patch('/:id/approve', async (req, res, next) => {
     const receipt = await GoodsReceipt.findById(req.params.id);
     
     if (!receipt) return next(Object.assign(new Error('Goods Receipt not found'), { statusCode: 404 }));
+    if (receipt.status === 'RECEIVED') return next(Object.assign(new Error('Goods receipt is already processed'), { statusCode: 400 }));
 
     let newStatus = receipt.status;
 
@@ -163,6 +165,8 @@ router.patch('/:id/approve', async (req, res, next) => {
       newStatus = 'PENDING_REVIEW';
     } else if (receipt.status === 'PENDING_REVIEW' && (role === 'MANAGER' || role === 'ADMIN')) {
       newStatus = 'RECEIVED';
+      receipt.approvedBy = req.user.id;
+      receipt.approvedAt = new Date();
     } else {
       return next(Object.assign(new Error('Invalid status transition or permission denied'), { statusCode: 403 }));
     }
@@ -195,6 +199,33 @@ router.patch('/:id/approve', async (req, res, next) => {
           });
         }
       }
+
+      // Update PO status and received quantities
+      const po = await PurchaseOrder.findById(receipt.purchaseOrderId);
+      if (po) {
+        let allFullyReceived = true;
+        let anyReceived = false;
+
+        po.items.forEach(poItem => {
+          const grnItem = receipt.items.find(i => i.itemId.toString() === poItem.itemId.toString());
+          if (grnItem) {
+            poItem.receivedQuantity = (poItem.receivedQuantity || 0) + grnItem.receivedQuantity;
+          }
+          if (poItem.receivedQuantity < poItem.quantity) {
+            allFullyReceived = false;
+          }
+          if (poItem.receivedQuantity > 0) {
+            anyReceived = true;
+          }
+        });
+
+        if (allFullyReceived) {
+          po.status = 'COMPLETED';
+        } else if (anyReceived) {
+          po.status = 'PARTIALLY_RECEIVED';
+        }
+        await po.save();
+      }
     }
 
     res.sendSuccess(receipt);
@@ -210,6 +241,7 @@ router.patch('/:id/reject', async (req, res, next) => {
       return next(Object.assign(new Error('Permission denied'), { statusCode: 403 }));
     }
 
+    const { rejectionReason } = req.body;
     const receipt = await GoodsReceipt.findById(req.params.id);
     if (!receipt) return next(Object.assign(new Error('Goods Receipt not found'), { statusCode: 404 }));
 
@@ -218,6 +250,9 @@ router.patch('/:id/reject', async (req, res, next) => {
     }
 
     receipt.status = 'REJECTED';
+    receipt.rejectedBy = req.user.id;
+    receipt.rejectedAt = new Date();
+    receipt.rejectionReason = rejectionReason || 'Rejected by Manager/Admin';
     await receipt.save();
     res.sendSuccess(receipt);
   } catch (err) {
