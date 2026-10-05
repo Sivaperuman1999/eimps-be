@@ -10,7 +10,7 @@ const seedAdmin = async () => {
     console.log(`Connected to MongoDB: ${conn.connection.host}`);
 
     // 2. Check if admin already exists
-    const adminEmail = 'admin@example.com';
+    const adminEmail = 'admin@gmail.com';
     const existingAdmin = await User.findOne({ email: adminEmail });
 
     if (existingAdmin) {

@@ -30,7 +30,7 @@ async function seedDatabase() {
     console.log('Seeding Users...');
     const passwordHash = await bcrypt.hash('Admin@123', 10);
     const usersData = [
-      { name: 'Super Admin', email: 'superadmin@eimps.com', password: passwordHash, role: 'ADMIN', isActive: true }
+      { name: 'Admin', email: 'admin@gmail.com', password: passwordHash, role: 'ADMIN', isActive: true }
     ];
 
     const users = [];
@@ -237,9 +237,9 @@ async function seedDatabase() {
         // If GRN is received, we must add to stock
         if (grn.status === 'RECEIVED') {
           for (const grnItem of grn.items) {
-             await Item.findByIdAndUpdate(grnItem.itemId, {
-               $inc: { quantity: grnItem.receivedQuantity }
-             });
+            await Item.findByIdAndUpdate(grnItem.itemId, {
+              $inc: { quantity: grnItem.receivedQuantity }
+            });
           }
         }
       }
