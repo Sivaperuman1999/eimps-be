@@ -26,5 +26,8 @@ jobs:
             # Pull the latest code from the main branch
             git pull origin main
             
+            # Update FRONTEND_URL in the .env file for CORS
+            sed -i 's|^FRONTEND_URL=.*|FRONTEND_URL=http://eimps-frontend-prod.s3-website.ap-south-1.amazonaws.com|' .env
+            
             # Rebuild and restart the docker containers
             docker compose up -d --build
